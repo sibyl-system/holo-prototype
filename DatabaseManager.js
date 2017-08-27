@@ -1,3 +1,9 @@
+/*
+ * Database manager to 
+ * organise and make things
+ * quicker
+ */
+
 class DatabaseManager {
 
 	constructor(info) {

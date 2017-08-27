@@ -13,19 +13,27 @@ const dbInfo = require('./database');
 const dbManager = new (require('./DatabaseManager'))(dbInfo);
 
 /*
- *  Temporary
- * Message Event
+ * Handle the database
+ * and existing holos
  */
 
-function createHolo(user, extra) {
+function handleUser(user, extra) {
 	let channel = extra.message.channel;
 	let webhook;
+	
+	// find existing webhooks 
 	channel.fetchWebhooks().then(webhooks => {
+		
+		// helper variables
 		if(webhooks.has('name', 'sibyl-holo')) webhook = webhooks.find('name','sibyl-holo');
 		let {message} =  extra;
 		let botMember = message.guild.me;
+
+		// permission checker
 		if(!botMember.hasPermission('MANAGE_WEBHOOKS')) return message.channel.sendMessage(':warning: Sibyl requires `ADMINISTRATOR` permissions in order to function.');
 		if(!user.holo) user.holo = {};
+		
+		// when there isn't already a webhook
 		if(!user.holo.webhook) {
 			console.log('hello');
 			message.channel.createWebhook('sibyl-holo', 'http://bit.ly/2utJn7V')
@@ -35,22 +43,28 @@ function createHolo(user, extra) {
 				user.holo.webhook.owner = '';
 				dbManager.push(`users/${message.author.id}/`, user);
 			}).catch(error => console.log);
-		} else if(user.holo.webhook) {
-			console.log('hi kek');
+		}
+
+		// when there is already a webhook
+		else if(user.holo.webhook) {
+			// create a new holo
 			user.holo = new Holo(user.holo.webhook, {name: extra.name, avatar: extra.avatar}, extra.author.id);
+			// create a new webhook client
 			user.holo.webhook = new WebhookClient(user.holo.webhook.id, user.holo.webhook.token);
+			// fix recursion depth issues whatever
 			user.holo.webhook.owner = '';
 			user.holo.webhook.options = {};
 			user.holo.webhook.rest = {};
 			user.holo.webhook.resolver = {};
+			// update the database
 			dbManager.push(`users/${message.author.id}/`, user);
 		}
 	});
 }
 
-function handleUser(user, extra) {
-	createHolo(user, extra);
-}
+/*
+ * Message Event
+ */
 
 client.on('message', message => {
 
@@ -58,9 +72,14 @@ client.on('message', message => {
 	let prefix = 's!';
 	let { guild, channel, content, author } = message;
 	let suffix = content.split(' ')[0].substring(prefix.length);
+	let args = content.split(' ').splice(1).join(' ').trim().split(';');
 
 	// s!holo Seagull ; http://bit.ly/2utJn7V
 	// s!holo Akane ; http://bit.ly/2wRhHd9
+	
+	/*
+	 * Holo message replacer
+	 */
 	
 	dbManager.get(`users/${message.author.id}`)
 	.then(user => {
@@ -75,9 +94,10 @@ client.on('message', message => {
 		}
 	});
 
+	// filter messages to commands
 	if(!content.startsWith(prefix)) return;
-	let args = content.split(' ').splice(1).join(' ').trim().split(';');
 
+	// holo updater command
 	if(suffix == 'holo' && ['enable','disable'].indexOf(args[0]) === -1) {
 		let name = args[0];
 		let avatar = args[1];
@@ -86,7 +106,9 @@ client.on('message', message => {
 		if(!avatar && name) return message.channel.send(`:warning: A holo avatar was not given`);
 		else if(!avatar && !name) return message.channel.send(`:warning: Neither a holo avatar or a holo name was given`);
 		dbManager.get(`users/${author.id}`).then(data => { handleUser(data, { message, author, name, avatar }) });
-	} else if(suffix == 'holo' && ['enable','disable'].indexOf(args[0]) !== -1) {
+	}
+	// holo enable/disabler
+	else if(suffix == 'holo' && ['enable','disable'].indexOf(args[0]) !== -1) {
 		dbManager.get(`users/${author.id}`)
 		.then(user => {
 			if(args[0] == 'enable') user.holoEnabled = true
@@ -97,7 +119,9 @@ client.on('message', message => {
 	}
 });
 
+
 client.login(Keys.sibylAccount);
+
 process.on('unhandledRejection', error => {
 	console.log('unhandledRejection', error.stack);
 });
